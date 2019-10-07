@@ -135,9 +135,10 @@ model <- function(time, state, parms, gpp_choice){
 
 # Initial conditions ------------------------------------------------------
 # Two vectors of stream and transient storage DO concentrations
-DO_ini = rep(7, 50)
-DO_stor_ini = rep(5, 50)
-yini <- c(DO = DO_ini, DO_stor = DO_stor_ini)
+DO_ini = 7 # mg/L
+DO_stor_ini = 5 # mg/L
+yini <- c(DO = rep(DO_ini, with(as.list(parms), L / dx)),
+          DO_stor = rep(DO_stor_ini, with(as.list(parms), L / dx)))
 
 # Run the model -----------------------------------------------------------
 # Get simulation times
