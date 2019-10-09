@@ -8,6 +8,7 @@
 library(deSolve)
 library(tidyverse)
 library(ReacTran)
+library(lubridate)
 
 # Define model parameters --------------------------------------------------------
 parms <- c(
@@ -19,7 +20,7 @@ parms <- c(
   
   # Hydraulic parameters
   Q = 5, # discharge (m3/s)
-  d = 1, # average depth (m)
+  d = 1.5, # average depth (m)
   w = 40, # average channel width (m)
   S = 0.001, # average channel slope (m/m)
   
@@ -32,8 +33,8 @@ parms <- c(
   # Storage parameters
   A_stor_frac = 0.2, # fraction of channel area that is storage area (-)
   alpha = 0.8, # exchange coefficient (m3/hr)
-  k_er = 0.4, # storage area respiration coefficient (-)
-  eta_er = 0.5, #storage area respiration efficiency (-)
+  k_er = 1.5, # storage area respiration coefficient (-)
+  eta_er = 1, #storage area respiration efficiency (-)
   
   # Random GPP parameters
   sd = 0.2, # standard deviation of normal distribution to GPP
@@ -123,12 +124,12 @@ model <- function(time, state, parms, gpp_choice){
     storage_str = alpha * (DO_stor - DO)
     
     # Rates of change
-    dDO = (adv_dis + (gpp + reaeration + storage_str) /d) * del_t
+    dDO = (adv_dis + (gpp + reaeration + storage_str) / d) * del_t
     dDO_stor = storage * del_t
     diffs = c(dDO = dDO, dDO_stor = dDO_stor)
     
     # Fluxes
-    fluxes = c(GPP = gpp * del_t, ER = er * del_t)
+    fluxes = c(GPP = gpp * del_t / d, ER = er * del_t / d)
     
     # Output of model
     return(list(diffs, fluxes, PAR = rep(par, N)))
@@ -151,7 +152,7 @@ times <- seq(0, simulation_time, by = del_t)
 
 # GPP choice (choose between: "constant", "ran_uni", "ran_norm", "ran_bin", 
 # "ramp_up", "ramp_down", or "ramp_up_down")
-gpp_choice <- "ran_uni"
+gpp_choice <- "constant"
 
 # uses the R deSolve function (lsoda method)
 out <- ode.1D(y = yini, 
@@ -200,9 +201,19 @@ df %>%
 df_sm <- df %>%
   filter(type %in% c("PAR", "DO"),
          reach == 40) %>%
-  mutate(type,
-         `PAR` = "light",
-         `DO` = "DO.obs") %>%
+  select(time_hr, type, value) %>%
+  spread(type, value) %>%
+  rename(light = PAR,
+         DO.obs = DO) %>%
   mutate(temp.water = 20,
          DO.sat = with(as.list(parms), do_sat),
-         depth = with(as.list(parms), d))
+         depth = with(as.list(parms), d),
+         day_no = ceiling(time_hr / 24),
+         time = paste(floor(time_hr %% 24), 
+                      round((time_hr %% 24 - floor(time_hr %% 24)) * 60,
+                            digits = 2), sep=":"),
+         datetime = ymd_hm(paste0("2019-07-0", day_no, " ", time))) %>%
+  drop_na() %>%
+  select(-time_hr, -time, -day_no)
+
+plot(df_sm$datetime, df_sm$DO.obs)
